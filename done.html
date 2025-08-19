@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tạo ảnh từ phôi – thêm tên, chức vụ, thông điệp</title>
+<style>
+  :root{ --bg:#0b1220; --card:#0f172a; --muted:#94a3b8; --accent:#38bdf8; }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0b1220,#0b1324);color:#e5eefb;font-family:system-ui,Segoe UI,Roboto,Arial}
+  .app{display:grid;grid-template-columns:350px 1fr;gap:18px;padding:18px;max-width:1400px;margin:auto}
+  .card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+  .left{padding:16px}
+  .left h2{margin:0 0 10px;font-size:18px}
+  .row{display:grid;gap:8px;margin-bottom:12px}
+  label{font-size:12px;color:var(--muted)}
+  input[type="text"],textarea,select{
+    width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,.1);
+    background:#0d1426;color:#e6f0ff;border-radius:10px;outline:none
+  }
+  textarea{min-height:84px;resize:vertical}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.1);
+    background:#0e1a34;color:#eaf4ff;cursor:pointer;font-weight:600
+  }
+  .btn.primary{background:linear-gradient(90deg,#22d3ee,#60a5fa);color:#001326;border:0}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .bar{display:flex;gap:10px;flex-wrap:wrap}
+  .preview-wrap{position:relative;overflow:auto;padding:12px}
+  .stage{
+    position:relative;margin:auto;user-select:none;touch-action:none;
+    background:#111827;border-radius:12px;border:1px dashed rgba(255,255,255,.15)
+  }
+  .stage img{display:block;max-width:100%;height:auto;border-radius:12px}
+  .draggable{
+    position:absolute;min-width:160px;max-width:80%;
+    padding:6px 10px;border-radius:10px;cursor:move;line-height:1.25;
+    white-space:pre-wrap;word-break:break-word;text-shadow:0 1px 2px rgba(0,0,0,.35)
+  }
+  .draggable:focus{outline:2px solid var(--accent)}
+  .ghost{border:1px dashed rgba(255,255,255,.25)}
+  .tag{font-size:11px;color:#9fb3d1;margin-left:6px}
+  .hint{font-size:12px;color:#9fb3d1;margin:6px 0 0}
+  .footer{padding:12px;border-top:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .out{display:none;margin-left:auto}
+  .chip{padding:4px 8px;border-radius:999px;background:#0d203f;border:1px solid rgba(255,255,255,.08);font-size:12px}
+  .color{display:flex;align-items:center;gap:8px}
+  input[type="color"]{appearance:none;border:0;width:28px;height:28px;border-radius:8px;background:transparent}
+  .small{font-size:12px;color:#a7b5cc}
+
+  /* NEW: avatar preview box (tròn) */
+  #avatarBox{
+    position:absolute; width:160px; height:160px; border-radius:50%;
+    overflow:hidden; cursor:move; object-fit:cover; object-position:center;
+    box-shadow:0 2px 10px rgba(0,0,0,.25);
+  }
+
+  @media (max-width:980px){ .app{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+  <div class="app">
+    <!-- Controls -->
+    <section class="card left">
+      <h2>Thiết lập</h2>
+
+      <div class="row">
+        <label>Ảnh phôi (PNG/JPG) <span class="tag">mặc định: phoi.png</span></label>
+        <input id="tplFile" type="file" accept="image/*">
+        <button class="btn" id="useDefault">Dùng phoi.png</button>
+      </div>
+
+      <!-- NEW: Upload avatar -->
+      <div class="row">
+        <label>Ảnh avatar (bo tròn, góc trên bên phải)</label>
+        <input id="avatarFile" type="file" accept="image/*">
+      </div>
+
+      <div class="row">
+        <label>Tên</label>
+        <input id="nameInput" type="text" placeholder="VD: NGUYỄN THỊ DIỆU NGỌC">
+      </div>
+
+      <div class="row">
+        <label>Chức vụ / Đơn vị</label>
+        <input id="roleInput" type="text" placeholder="VD: ĐOÀN VIÊN XÃ VĂN KIỀU">
+      </div>
+
+      <div class="row">
+        <label>Thông điệp (đa dòng)</label>
+        <textarea id="msgInput" placeholder="• Tuổi trẻ xã Văn Kiều tin tưởng và kỳ vọng
+• Chúc đại hội thành công tốt đẹp
+• Chúng tôi mong muốn được đóng góp"></textarea>
+        <div class="hint">Bạn có thể thêm ký hiệu • ở đầu dòng để giống mẫu.</div>
+      </div>
+
+      <div class="cols row">
+        <div class="row">
+          <label>Phông chữ</label>
+          <select id="fontFamily">
+            <option value="Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif">Impact / đậm hẹp</option>
+            <option value="Montserrat, Arial, sans-serif">Montserrat</option>
+            <option value="Roboto, Arial, sans-serif">Roboto</option>
+            <option value="Arial Black, Arial, sans-serif">Arial Black</option>
+            <option value="'Times New Roman', serif">Times</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>Căn dòng</label>
+          <select id="align">
+            <option value="left">Trái</option>
+            <option value="center">Giữa</option>
+            <option value="right">Phải</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="cols row">
+        <div class="row">
+          <label>Cỡ chữ Tên</label>
+          <input id="nameSize" type="range" min="18" max="90" step="1" value="46">
+        </div>
+        <div class="row">
+          <label>Cỡ chữ Chức vụ</label>
+          <input id="roleSize" type="range" min="14" max="64" step="1" value="28">
+        </div>
+      </div>
+
+      <div class="cols row">
+        <div class="row">
+          <label>Cỡ chữ Thông điệp</label>
+          <input id="msgSize" type="range" min="16" max="56" step="1" value="30">
+        </div>
+        <div class="row">
+          <label>Giãn dòng Thông điệp</label>
+          <input id="lineHeight" type="range" min="1.0" max="2.0" step="0.05" value="1.35">
+        </div>
+      </div>
+
+      <div class="cols row">
+        <div class="row color">
+          <label>Màu chữ Tên</label>
+          <input id="nameColor" type="color" value="#ffffff">
+        </div>
+        <div class="row color">
+          <label>Màu chữ Nội dung</label>
+          <input id="textColor" type="color" value="#133f86">
+        </div>
+      </div>
+
+      <div class="bar">
+        <button class="btn" id="resetPos">Đặt lại vị trí</button>
+        <button class="btn primary" id="renderBtn">Tạo ảnh (PNG)</button>
+        <a id="downloadLink" class="btn out" download="thong-diep.png">Tải xuống</a>
+      </div>
+      <p class="small" style="margin-top:8px">
+        Mẹo: kéo các khối chữ trên ảnh để canh đúng khung như <b>mẫu.png</b>. Nhấn <b>Tạo ảnh</b> để xuất PNG sắc nét theo kích thước phôi.
+      </p>
+    </section>
+
+    <!-- Preview / Stage -->
+    <section class="card preview-wrap">
+      <div id="stage" class="stage" tabindex="-1">
+        <img id="tpl" alt="phôi" />
+        <!-- Draggable text blocks -->
+        <div id="nameBox" class="draggable ghost" contenteditable="false"></div>
+        <div id="roleBox" class="draggable ghost" contenteditable="false"></div>
+        <div id="msgBox"  class="draggable ghost" contenteditable="false"></div>
+
+        <!-- NEW: avatar element (bo tròn & kéo thả) -->
+        <img id="avatarBox" alt="avatar" style="display:none" />
+      </div>
+
+      <div class="footer">
+        <span class="chip">Xem trước</span>
+        <canvas id="canvas" style="display:none"></canvas>
+      </div>
+    </section>
+  </div>
+
+<script>
+/* ===== Helpers ===== */
+const $ = (s)=>document.querySelector(s);
+const stage = $("#stage");
+const tplImg = $("#tpl");
+const canvas = $("#canvas");
+const ctx = canvas.getContext("2d");
+
+const nameInput = $("#nameInput");
+const roleInput = $("#roleInput");
+const msgInput  = $("#msgInput");
+
+const nameBox = $("#nameBox");
+const roleBox = $("#roleBox");
+const msgBox  = $("#msgBox");
+
+const nameSize = $("#nameSize");
+const roleSize = $("#roleSize");
+const msgSize  = $("#msgSize");
+const lineHeight = $("#lineHeight");
+const fontFamily = $("#fontFamily");
+const alignSel   = $("#align");
+const nameColor  = $("#nameColor");
+const textColor  = $("#textColor");
+
+const link = $("#downloadLink");
+
+/* NEW: avatar state */
+const avatarBox = $("#avatarBox");
+const avatarFile = $("#avatarFile");
+let avatarImg = null; // Image() sau khi upload
+
+let tplNatural = {w:1080,h:1620}; // fallback ratio
+
+function loadTemplate(src){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = ()=>resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+async function setTemplateFrom(src){
+  const img = await loadTemplate(src);
+  tplNatural = {w: img.naturalWidth, h: img.naturalHeight};
+  tplImg.src = src;
+
+  // Fit preview width while keeping ratio
+  const maxW = Math.min(900, stage.parentElement.clientWidth - 40);
+  const ratio = tplNatural.w / tplNatural.h;
+  const viewW = maxW;
+  const viewH = Math.round(viewW / ratio);
+
+  stage.style.width = viewW + "px";
+  stage.style.height = viewH + "px";
+
+  // position default boxes if empty
+  if(!nameBox.dataset.init){
+    resetPositions();
+  }
+  // đặt avatar mặc định ở góc trên phải (ẩn nếu chưa chọn)
+  placeAvatarDefault();
+  applyStyles();
+}
+
+function resetPositions(){
+  // default positions roughly like mẫu.png (relative by %)
+  place(nameBox, 0.12, 0.16);
+  place(roleBox, 0.12, 0.22);
+  place(msgBox,  0.12, 0.58);
+  nameBox.dataset.init = "1";
+}
+function place(el, px, py){
+  const r = stage.getBoundingClientRect();
+  el.style.left = Math.round(r.width * px) + "px";
+  el.style.top  = Math.round(r.height* py) + "px";
+}
+
+/* NEW: avatar default position & size */
+function placeAvatarDefault(){
+  const r = stage.getBoundingClientRect();
+  const side = Math.round(r.width * 0.22);         // ~22% bề ngang
+  avatarBox.style.width  = "400px";
+  avatarBox.style.height = "400px";
+  avatarBox.style.left   = "486px"; // gần góc phải
+  avatarBox.style.top    = "94px"; // gần phía trên
+}
+
+/* ===== Draggable blocks ===== */
+let drag = null;
+function startDrag(e, el){
+  const rect = el.getBoundingClientRect();
+  const srect= stage.getBoundingClientRect();
+  const x = ("touches" in e)? e.touches[0].clientX : e.clientX;
+  const y = ("touches" in e)? e.touches[0].clientY : e.clientY;
+  drag = {
+    el,
+    dx: x - rect.left,
+    dy: y - rect.top,
+    minX: srect.left, minY: srect.top,
+    maxX: srect.right - rect.width,
+    maxY: srect.bottom - rect.height
+  };
+  el.classList.remove("ghost");
+}
+function onDrag(e){
+  if(!drag) return;
+  const x = ("touches" in e)? e.touches[0].clientX : e.clientX;
+  const y = ("touches" in e)? e.touches[0].clientY : e.clientY;
+  let nx = x - drag.dx, ny = y - drag.dy;
+  nx = Math.max(drag.minX, Math.min(nx, drag.maxX));
+  ny = Math.max(drag.minY, Math.min(ny, drag.maxY));
+  const srect = stage.getBoundingClientRect();
+  drag.el.style.left = (nx - srect.left) + "px";
+  drag.el.style.top  = (ny - srect.top) + "px";
+}
+function endDrag(){ if(drag){ drag.el.classList.add("ghost"); drag=null; } }
+
+[nameBox,roleBox,msgBox,avatarBox].forEach(el=>{
+  el.addEventListener("mousedown",e=>startDrag(e,el));
+  el.addEventListener("touchstart",e=>startDrag(e,el),{passive:true});
+});
+window.addEventListener("mousemove",onDrag);
+window.addEventListener("touchmove",onDrag,{passive:true});
+window.addEventListener("mouseup",endDrag);
+window.addEventListener("touchend",endDrag);
+
+/* ===== Text rendering ===== */
+function applyStyles(){
+  nameBox.textContent = nameInput.value.trim();
+  roleBox.textContent = roleInput.value.trim();
+  msgBox.textContent  = msgInput.value;
+
+  [nameBox, roleBox, msgBox].forEach(el=>{
+    el.style.fontFamily = fontFamily.value;
+    el.style.textAlign  = alignSel.value;
+  });
+
+  nameBox.style.fontSize = nameSize.value + "px";
+  roleBox.style.fontSize = roleSize.value + "px";
+  msgBox.style.fontSize  = msgSize.value  + "px";
+  msgBox.style.lineHeight= lineHeight.value;
+
+  nameBox.style.color = nameColor.value;
+  roleBox.style.color = textColor.value;
+  msgBox.style.color  = textColor.value;
+}
+[nameInput,roleInput,msgInput,nameSize,roleSize,msgSize,lineHeight,fontFamily,alignSel,nameColor,textColor]
+  .forEach(ctrl=>ctrl.addEventListener("input",applyStyles));
+
+$("#resetPos").addEventListener("click", ()=>{
+  resetPositions();
+  placeAvatarDefault();
+});
+
+/* ===== Template file inputs ===== */
+$("#tplFile").addEventListener("change", (e)=>{
+  const f=e.target.files?.[0]; if(!f) return;
+  setTemplateFrom(URL.createObjectURL(f));
+});
+$("#useDefault").addEventListener("click", ()=>{
+  setTemplateFrom("phoi.png");
+});
+
+/* NEW: avatar upload handler */
+avatarFile.addEventListener("change",(e)=>{
+  const f = e.target.files?.[0]; if(!f) return;
+  const url = URL.createObjectURL(f);
+  const img = new Image();
+  img.onload = ()=>{
+    avatarImg = img;
+    avatarBox.src = url;
+    avatarBox.style.display = "block";
+    // đảm bảo bo tròn
+    avatarBox.style.borderRadius = "50%";
+  };
+  img.src = url;
+});
+
+/* ===== Canvas render with wrapping ===== */
+function px2real(v, axis){ // convert preview px -> real px on canvas
+  const s = stage.getBoundingClientRect();
+  return Math.round(v * (axis==="x" ? (tplNatural.w/s.width) : (tplNatural.h/s.height)));
+}
+function drawWrappedText(text, opt){
+  const {x,y,maxWidth,lineHeight, font, color, textAlign} = opt;
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textAlign = textAlign;
+  ctx.textBaseline = "top";
+
+  const words = text.split(/\s+/);
+  let line="", cy=y;
+  const space = " ";
+  for(let i=0;i<words.length;i++){
+    const test = line ? (line+space+words[i]) : words[i];
+    const w = ctx.measureText(test).width;
+    if(w > maxWidth && line){
+      drawLine(line, x, cy, textAlign);
+      line = words[i];
+      cy += lineHeight;
+    }else{
+      line = test;
+    }
+  }
+  if(line){ drawLine(line, x, cy, textAlign); }
+
+  function drawLine(s, xx, yy, align){
+    let dx = xx;
+    if(align==="center") dx = xx;
+    else if(align==="right") dx = xx;
+    ctx.fillText(s, dx, yy);
+  }
+}
+
+function render(){
+  // setup canvas true size
+  canvas.width  = tplNatural.w;
+  canvas.height = tplNatural.h;
+
+  // draw template
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(tplImg, 0,0, canvas.width, canvas.height);
+
+  // collect blocks
+  const srect = stage.getBoundingClientRect();
+
+  const blocks = [
+    {el:nameBox, size:parseInt(nameSize.value), color:nameColor.value, text:nameInput.value.trim()},
+    {el:roleBox, size:parseInt(roleSize.value), color:textColor.value, text:roleInput.value.trim()},
+    {el:msgBox,  size:parseInt(msgSize.value),  color:textColor.value, text:msgInput.value}
+  ];
+  const family = fontFamily.value;
+  const align  = alignSel.value;
+
+  blocks.forEach(({el,size,color,text})=>{
+    const r = el.getBoundingClientRect();
+    const left = px2real(r.left - srect.left, "x");
+    const top  = px2real(r.top  - srect.top , "y");
+    const maxW = px2real(r.width || srect.width*0.7, "x");
+    const lh   = Math.round(size * parseFloat(lineHeight.value));
+
+    let x = left;
+    if(align==="center") x = left + maxW/2;
+    if(align==="right")  x = left + maxW;
+
+    drawWrappedText(text, {
+      x, y:top, maxWidth:maxW, lineHeight:lh,
+      font:`${size}px ${family}`, color, textAlign:align
+    });
+  });
+
+  // NEW: draw circular avatar if available
+  if(avatarImg && avatarBox.style.display !== "none"){
+    const r = avatarBox.getBoundingClientRect();
+    const left = px2real(r.left - srect.left, "x");
+    const top  = px2real(r.top  - srect.top , "y");
+    const w    = px2real(r.width, "x");
+    const h    = px2real(r.height,"y");
+    const cx = left + w/2, cy = top + h/2, rad = Math.min(w,h)/2;
+
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI*2); ctx.closePath(); ctx.clip();
+    ctx.drawImage(avatarImg, left, top, w, h);
+    ctx.restore();
+  }
+
+  // show download
+  const url = canvas.toDataURL("image/png");
+  link.href = url;
+  link.style.display = "inline-flex";
+}
+
+/* ===== Event bindings ===== */
+$("#renderBtn").addEventListener("click", ()=>{
+  render();
+  link.scrollIntoView({behavior:"smooth",block:"center"});
+});
+
+/* ===== Init ===== */
+(async function init(){
+  try{
+    await setTemplateFrom("phoi.png");
+  }catch{
+    const off=document.createElement("canvas");
+    off.width=1080; off.height=1620;
+    const c=off.getContext("2d");
+    const g=c.createLinearGradient(0,0,0,off.height);
+    g.addColorStop(0,"#cfefff"); g.addColorStop(1,"#ffffff");
+    c.fillStyle=g; c.fillRect(0,0,off.width,off.height);
+    setTemplateFrom(off.toDataURL());
+  }
+  // demo text
+  nameInput.value = "Vũ Hoàng Anh";
+  roleInput.value = "ĐOÀN VIÊN XÃ VĂN KIỀU";
+  msgInput.value  = "• Tuổi trẻ xã Văn Kiều tin tưởng và kỳ vọng\n• Chúc đại hội thành công tốt đẹp\n• Chúng tôi mong muốn được đóng góp";
+  applyStyles();
+})();
+</script>
+</body>
+</html>
